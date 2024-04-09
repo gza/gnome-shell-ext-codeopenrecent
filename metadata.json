@@ -1,0 +1,8 @@
+{
+  "name": "VSCode Recently Opened Folders",
+  "description": "\"recent opened VSCode folders SearchProvider\"",
+  "uuid": "codeopenrecent@webgr.fr",
+  "shell-version": [
+    "45"
+  ]
+}
