@@ -10,7 +10,7 @@
 
 ```bash
 cd .local/share/gnome-shell/extensions
-git clone https://github.com/gza/gnome-shell-ext-codeopenrecent.git codeopenrecent
+git clone https://github.com/gza/gnome-shell-ext-codeopenrecent.git codeopenrecent@gza.github.com
 ```
 
 # Contributing
