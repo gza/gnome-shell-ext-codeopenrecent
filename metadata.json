@@ -3,6 +3,8 @@
   "description": "\"recent opened VSCode folders SearchProvider\"",
   "uuid": "codeopenrecent@webgr.fr",
   "shell-version": [
-    "45"
+    "45",
+    "46",
+    "47"
   ]
 }
