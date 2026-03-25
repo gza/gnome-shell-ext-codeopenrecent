@@ -207,14 +207,15 @@ class SearchProvider {
     this._historyEntries.length = 0;
 
     const dataModel = conn.execute_select_command(
-      "SELECT value FROM ItemTable WHERE key = 'history.recentlyOpenedPathsList'"
+      "SELECT CAST(value AS TEXT) FROM ItemTable WHERE key = 'history.recentlyOpenedPathsList'"
     );
 
     const iter = dataModel.create_iter();
 
     if (!iter.move_next()) return [];
 
-    const result = JSON.parse(iter.get_value_at(0).to_string(0));
+    const jsonStr = iter.get_value_at(0).get_string();
+    const result = JSON.parse(jsonStr);
     conn.close();
 
     while (result.entries.length > 0) {

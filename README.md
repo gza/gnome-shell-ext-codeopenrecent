@@ -6,6 +6,11 @@
 * Not published on extensions.gnome.org yet.
 * Use cases are probably missing.
 
+# testing
+
+* install mutter-devkit
+* `dbus-run-session gnome-shell --devkit --wayland`
+
 # Contributing
 
 Contributions are welcome. Please open a pull request.
