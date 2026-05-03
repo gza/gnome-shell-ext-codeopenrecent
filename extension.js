@@ -52,7 +52,12 @@ class SearchProvider {
    * @type {Gio.AppInfo}
    */
   get appInfo() {
-    return null;
+    return (
+      Gio.DesktopAppInfo.new("code.desktop") ??
+      Gio.DesktopAppInfo.new("code-oss.desktop") ??
+      Gio.DesktopAppInfo.new("visual-studio-code.desktop") ??
+      null
+    );
   }
 
   /**
