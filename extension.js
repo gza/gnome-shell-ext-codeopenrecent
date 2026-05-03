@@ -32,6 +32,7 @@ import * as Main from "resource:///org/gnome/shell/ui/main.js";
  * @property {string} uri - The URI of the history entry
  * @property {string} title - The human-readable label (last path segment)
  * @property {string} description - Human-friendly description line
+ * @property {string} iconName - System icon name for the workspace type
  */
 
 class SearchProvider {
@@ -169,7 +170,7 @@ class SearchProvider {
           clipboardText: historyEntry.uri,
           createIcon: (size) => {
             return new St.Icon({
-              icon_name: "dialog-information",
+              icon_name: historyEntry.iconName ?? "dialog-information",
               width: size * scaleFactor,
               height: size * scaleFactor,
             });
@@ -209,6 +210,48 @@ class SearchProvider {
   }
 
   /**
+   * Build a type-aware title from a VS Code folder URI.
+   *
+   * - ssh-remote     → "<host> — <basename>"
+   * - dev-container  → "Container — <basename>"
+   * - file://        → "<basename>" (last path segment)
+   *
+   * @param {string} uri
+   * @returns {string}
+   */
+  _buildTitleFromUri(uri) {
+    try {
+      if (uri.includes('ssh-remote')) {
+        const decoded = decodeURIComponent(uri);
+        const m = decoded.match(/ssh-remote\+([^/]+)(\/.*)?$/);
+        if (m) {
+          const basename = (m[2] ?? '/').replace(/\/$/, '').split('/').pop() || m[1];
+          return `${m[1]} — ${basename}`;
+        }
+      }
+      if (uri.includes('dev-container')) {
+        return `Container — ${this._buildLabelFromUri(uri)}`;
+      }
+    } catch (_) {
+      // fall through
+    }
+    return this._buildLabelFromUri(uri);
+  }
+
+  /**
+   * Return a system icon name for the workspace type.
+   *
+   * @param {string} uri
+   * @returns {string}
+   */
+  _buildIconNameForUri(uri) {
+    if (uri.startsWith('file://')) return 'folder';
+    if (uri.includes('ssh-remote')) return 'network-server';
+    if (uri.includes('dev-container')) return 'computer';
+    return 'dialog-information';
+  }
+
+  /**
    * Build a human-friendly description line from a VS Code folder URI.
    *
    * - file://        → decoded local path
@@ -226,7 +269,7 @@ class SearchProvider {
       if (uri.includes('ssh-remote')) {
         const decoded = decodeURIComponent(uri);
         const m = decoded.match(/ssh-remote\+([^/]+)(\/.*)?$/);
-        if (m) return `SSH: ${m[1]} — ${m[2] ?? '/'}`;
+        if (m) return m[2] ?? '/';
       }
       if (uri.includes('dev-container')) {
         const decoded = decodeURIComponent(uri);
@@ -295,19 +338,20 @@ class SearchProvider {
     // Build labels/descriptions and filter case-insensitively
     const lowerTerms = searchTerms.map(t => t.toLowerCase());
     for (const { uri } of raw) {
-      const label = this._buildLabelFromUri(uri);
+      const title = this._buildTitleFromUri(uri);
       const description = this._buildDescriptionFromUri(uri);
+      const iconName = this._buildIconNameForUri(uri);
       const lowerUri = uri.toLowerCase();
-      const lowerLabel = label.toLowerCase();
+      const lowerTitle = title.toLowerCase();
       let include = false;
       for (const term of lowerTerms) {
-        if (lowerUri.includes(term) || lowerLabel.includes(term)) {
+        if (lowerUri.includes(term) || lowerTitle.includes(term)) {
           include = true;
           break;
         }
       }
       if (include)
-        this._historyEntries.push({ uri, title: label, description });
+        this._historyEntries.push({ uri, title, description, iconName });
     }
 
     return this._historyEntries;

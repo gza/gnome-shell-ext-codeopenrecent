@@ -295,12 +295,14 @@ It is safe to stop here; no broken state exists.
 - *What if done*: Extension becomes reusable for other VS Code-compatible editors.
 - *What if not done*: Hard-coded `code` binary and `~/.config/Code` path only.
 
-### **Reco-2**: Better icon per workspace type
+### **Reco-2**: Better icon per workspace type — ✅ implemented
 
 - *What*: Use different icons for local, SSH, and devcontainer entries (e.g. `computer`,
   `network-server`, `container`) instead of the generic `dialog-information`.
 - *What if done*: Visual distinction in GNOME Overview results.
 - *What if not done*: All entries look identical; functional but not polished.
+- *Resolved by*: `specs/2026-05-03-richer-result-display-plan.md` — Phase 1, implemented
+  2026-05-03. Also adds SSH and dev-container title prefixes for further disambiguation.
 
 ---
 

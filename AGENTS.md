@@ -15,6 +15,7 @@ codeopenrecent@webgr.fr/
 ├── extension.js   – Entire extension: SearchProvider class + Extension entry point
 ├── metadata.json  – UUID, name, description, supported shell-version list
 ├── README.md      – Status notes and contribution guidelines
+├── specs/         - Specification documents and design notes (not user-facing)
 └── LICENSE        – GNU GPL-2.0-or-later
 ```
 
@@ -142,11 +143,11 @@ GNOME Overview search bar
 
 **URI types handled:**
 
-| URI scheme | Label | Description |
-|---|---|---|
-| `file:///path/to/foo` | `foo` | `/path/to/foo` |
-| `vscode-remote://ssh-remote%2Bhost/path` | `path` | `SSH: host — /path` |
-| `vscode-remote://dev-container%2B<HEX>/workspaces/foo` | `foo` | `Dev Container — <hostPath>` |
+| URI scheme | Title | Description | Icon |
+|---|---|---|---|
+| `file:///path/to/foo` | `foo` | `/path/to/foo` | `folder` |
+| `vscode-remote://ssh-remote%2Bhost/path` | `host — path` | `/path` | `network-server` |
+| `vscode-remote://dev-container%2B<HEX>/workspaces/foo` | `Container — foo` | `Dev Container — <hostPath>` | `computer` |
 
 ---
 
@@ -258,30 +259,3 @@ journalctl -fo cat /usr/bin/gnome-shell | grep -E "SearchProvider|codeopenrecent
 - [GNOME Extensions review guidelines](https://wiki.gnome.org/Projects/GnomeShell/Extensions/ReviewGuidelines)
 - [README.md](README.md) – current project status and contribution notes
 
----
-
-## Iteration Notes
-
-### 2026-03-24 — Initial generation
-
-- **Summary:** First AGENTS.md created from scratch by automated agent.
-- **Context coverage:** ~100 % from initial workspace context (4 files read
-  directly); 0 % required external codebase search — all information was present
-  in `extension.js`, `metadata.json`, `README.md`, and `LICENSE`.
-- **Missing / looked up:** No additional files were needed beyond the workspace.
-  `LICENSE` content was inferred from the SPDX header in `extension.js`
-  (`GPL-2.0-or-later`). No constitution file found; Golden Rules section left as
-  TODO pending user input.
-
-### 2026-05-03 — workspaceStorage migration
-
-- **Summary:** Replaced SQLite/`Gda` data source with `workspaceStorage/*/workspace.json`
-  enumeration. Removed `Gda` import entirely. Added `_hexToString`, `_buildLabelFromUri`,
-  and `_buildDescriptionFromUri` helpers for human-friendly display of all URI types.
-  Added case-insensitive search and top-100 result cap. Fixed `activateResult` shell-injection
-  risk by switching to `GLib.spawn_async` with explicit argv.
-- **Context coverage:** 100 % from workspace files + one terminal command
-  (`python3` hex-decode) to confirm devcontainer authority JSON shape.
-- **Key insight:** `workspaceStorage/*/workspace.json` is a simpler, single-source replacement
-  that covers all workspace types (local, SSH, devcontainer) with 590+ entries and free mtime
-  recency ordering — no SQLite required.
