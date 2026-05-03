@@ -20,7 +20,6 @@
 // https://gjs.guide/extensions/topics/search-provider.html
 
 import St from "gi://St";
-import Gda from "gi://Gda";
 import GLib from "gi://GLib";
 import Gio from "gi://Gio";
 
@@ -31,9 +30,8 @@ import * as Main from "resource:///org/gnome/shell/ui/main.js";
  * History entry
  * @typedef {Object} HistoryEntry
  * @property {string} uri - The URI of the history entry
- * @property {string} title - The title of the history entry
- * @property {string} remote - The remote of the history entry
- * @property {string} remoteType - The remote of the history entry
+ * @property {string} title - The human-readable label (last path segment)
+ * @property {string} description - Human-friendly description line
  */
 
 class SearchProvider {
@@ -91,7 +89,7 @@ class SearchProvider {
    */
   activateResult(result, terms) {
     console.debug(`activateResult(${result}, [${terms}])`);
-    GLib.spawn_command_line_async(`code --folder-uri ${result}`);
+    GLib.spawn_async(null, ['code', '--folder-uri', result], null, GLib.SpawnFlags.SEARCH_PATH, null);
   }
 
   /**
@@ -162,7 +160,7 @@ class SearchProvider {
         const meta = {
           id: identifier,
           name: historyEntry.title,
-          description: historyEntry.uri,
+          description: historyEntry.description,
           clipboardText: historyEntry.uri,
           createIcon: (size) => {
             return new St.Icon({
@@ -182,65 +180,129 @@ class SearchProvider {
   }
 
   /**
-   * Get the history entries.
+   * Decode a hex-encoded UTF-8 string.
    *
-   * @returns {Promise<HistoryEntry[]>} The history entries
+   * @param {string} hex - A hex string (even length)
+   * @returns {string} The decoded UTF-8 string
+   */
+  _hexToString(hex) {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < hex.length; i += 2)
+      bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+    return new TextDecoder().decode(bytes);
+  }
+
+  /**
+   * Build a human-readable label from a VS Code folder URI.
+   * Returns the last non-empty path segment.
+   *
+   * @param {string} uri
+   * @returns {string}
+   */
+  _buildLabelFromUri(uri) {
+    return decodeURIComponent(uri).replace(/\/$/, '').split('/').pop() || uri;
+  }
+
+  /**
+   * Build a human-friendly description line from a VS Code folder URI.
+   *
+   * - file://        → decoded local path
+   * - ssh-remote     → "SSH: <host> — <path>"
+   * - dev-container  → "Dev Container — <hostPath>" (hex-decoded from authority)
+   *
+   * @param {string} uri
+   * @returns {string}
+   */
+  _buildDescriptionFromUri(uri) {
+    try {
+      if (uri.startsWith('file://')) {
+        return decodeURIComponent(uri.slice('file://'.length));
+      }
+      if (uri.includes('ssh-remote')) {
+        const decoded = decodeURIComponent(uri);
+        const m = decoded.match(/ssh-remote\+([^/]+)(\/.*)?$/);
+        if (m) return `SSH: ${m[1]} — ${m[2] ?? '/'}`;
+      }
+      if (uri.includes('dev-container')) {
+        const decoded = decodeURIComponent(uri);
+        const m = decoded.match(/dev-container\+([0-9a-f]+)\//i);
+        if (m) {
+          const json = JSON.parse(this._hexToString(m[1]));
+          if (json.hostPath) return `Dev Container — ${json.hostPath}`;
+        }
+        return `Dev Container — ${this._buildLabelFromUri(uri)}`;
+      }
+    } catch (_) {
+      // fall through to raw URI
+    }
+    return uri;
+  }
+
+  /**
+   * Get the history entries by enumerating workspaceStorage directories.
+   * Sorted by mtime descending, capped at 100, filtered case-insensitively.
+   *
+   * @param {string[]} searchTerms
+   * @returns {Promise<HistoryEntry[]>}
    */
   async _getHistoryEntries(searchTerms) {
     console.debug(`_getHistoryEntries([${searchTerms}])`);
-    const globalStorageDir =
-      GLib.get_home_dir() + "/.config/Code/User/globalStorage";
-    // run a sqlite query to get the history entries
-    let conn;
+    const workspaceStoragePath =
+      GLib.get_home_dir() + '/.config/Code/User/workspaceStorage';
+
+    this._historyEntries.length = 0;
+
+    let raw = [];
     try {
-      conn = conn = new Gda.Connection({
-        provider: Gda.Config.get_provider("SQLite"),
-        cnc_string: `DB_DIR=${globalStorageDir};DB_NAME=state.vscdb`,
-      });
-      conn.open();
+      const storageDir = Gio.File.new_for_path(workspaceStoragePath);
+      const enumerator = storageDir.enumerate_children(
+        'standard::name,standard::type,time::modified',
+        Gio.FileQueryInfoFlags.NONE,
+        null
+      );
+
+      let info;
+      while ((info = enumerator.next_file(null)) !== null) {
+        if (info.get_file_type() !== Gio.FileType.DIRECTORY) continue;
+        const name = info.get_name();
+        const mtime = info.get_attribute_uint64('time::modified');
+        try {
+          const jsonFile = Gio.File.new_for_path(
+            `${workspaceStoragePath}/${name}/workspace.json`
+          );
+          const [, contents] = jsonFile.load_contents(null);
+          const data = JSON.parse(new TextDecoder().decode(contents));
+          if (data?.folder) raw.push({ uri: data.folder, mtime });
+        } catch (_) {
+          // missing or malformed workspace.json — skip silently
+        }
+      }
+      enumerator.close(null);
     } catch (error) {
       console.error(error);
       return [];
     }
 
-    // empty cached history entries
-    this._historyEntries.length = 0;
+    // Sort by mtime descending and keep the 100 most recent
+    raw.sort((a, b) => b.mtime - a.mtime);
+    raw = raw.slice(0, 100);
 
-    const dataModel = conn.execute_select_command(
-      "SELECT CAST(value AS TEXT) FROM ItemTable WHERE key = 'history.recentlyOpenedPathsList'"
-    );
-
-    const iter = dataModel.create_iter();
-
-    if (!iter.move_next()) return [];
-
-    const jsonStr = iter.get_value_at(0).get_string();
-    const result = JSON.parse(jsonStr);
-    conn.close();
-
-    while (result.entries.length > 0) {
-      const entry = result.entries.shift();
-      if ("folderUri" in entry) {
-        let include = false;
-        for (const term of searchTerms) {
-          if ('label' in entry && entry.label.includes(term)) {
-            include = true;
-            break;
-          }
-          if (entry.folderUri.includes(term)) {
-            include = true;
-            break;
-          }
-        }
-        if (include) {
-          this._historyEntries.push({
-            uri: entry.folderUri,
-            title: entry?.label || entry.folderUri,
-            remote: entry?.remoteAuthority || "local",
-            remoteType: entry.remoteAuthority ? "remote" : "local",
-          });
+    // Build labels/descriptions and filter case-insensitively
+    const lowerTerms = searchTerms.map(t => t.toLowerCase());
+    for (const { uri } of raw) {
+      const label = this._buildLabelFromUri(uri);
+      const description = this._buildDescriptionFromUri(uri);
+      const lowerUri = uri.toLowerCase();
+      const lowerLabel = label.toLowerCase();
+      let include = false;
+      for (const term of lowerTerms) {
+        if (lowerUri.includes(term) || lowerLabel.includes(term)) {
+          include = true;
+          break;
         }
       }
+      if (include)
+        this._historyEntries.push({ uri, title: label, description });
     }
 
     return this._historyEntries;

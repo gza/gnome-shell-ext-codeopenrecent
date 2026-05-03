@@ -107,31 +107,46 @@ GNOME Overview search bar
         │
         ├─ getInitialResultSet(terms)
         │       └─ _getHistoryEntries(terms)
-        │               └─ Gda.Connection → SQLite
-        │                  ~/.config/Code/User/globalStorage/state.vscdb
-        │                  SELECT value FROM ItemTable
-        │                  WHERE key = 'history.recentlyOpenedPathsList'
+        │               └─ Gio.File.enumerate_children
+        │                  ~/.config/Code/User/workspaceStorage/*/
+        │                  ↳ read workspace.json → { folder: URI }
+        │                  ↳ sort by mtime desc, slice top 100
+        │                  ↳ _buildLabelFromUri / _buildDescriptionFromUri
+        │                  ↳ filter case-insensitively by terms
         │
         ├─ getResultMetas(results) → ResultMeta[]  (name, description, icon)
         │
         └─ activateResult(result)
-                └─ GLib.spawn_command_line_async("code --folder-uri <uri>")
+                └─ GLib.spawn_async(['code', '--folder-uri', uri])
 ```
 
 **Components:**
 
 | Class / Object | Role |
-|---|---|
+|---|---------|
 | `SearchProvider` | Implements GNOME Search Provider protocol; caches `_historyEntries` |
 | `ExampleExtension` | GNOME `Extension` base class; registers/unregisters the provider |
+| `_hexToString(hex)` | Decodes hex-encoded UTF-8 (used for devcontainer authority JSON) |
+| `_buildLabelFromUri(uri)` | Returns last path segment as human-readable label |
+| `_buildDescriptionFromUri(uri)` | Returns type-prefixed description (SSH / Dev Container / local path) |
 
 **Data flow:**
 1. User types in GNOME Overview → Shell calls `getInitialResultSet`.
-2. `_getHistoryEntries` opens VS Code's SQLite DB via libgda, parses the JSON
-   blob, filters entries by search terms (checking `label` and `folderUri`).
+2. `_getHistoryEntries` enumerates `~/.config/Code/User/workspaceStorage/`, reads
+   each `workspace.json`, sorts by directory mtime (most recent first), slices to
+   top 100, builds labels/descriptions, and filters case-insensitively.
 3. Matching folder URIs are returned as identifiers; `getResultMetas` builds
-   display objects.
-4. On activation, VS Code is launched with `--folder-uri`.
+   display objects with human-friendly name and description.
+4. On activation, VS Code is launched with `GLib.spawn_async(['code', '--folder-uri', uri])`
+   — no shell expansion.
+
+**URI types handled:**
+
+| URI scheme | Label | Description |
+|---|---|---|
+| `file:///path/to/foo` | `foo` | `/path/to/foo` |
+| `vscode-remote://ssh-remote%2Bhost/path` | `path` | `SSH: host — /path` |
+| `vscode-remote://dev-container%2B<HEX>/workspaces/foo` | `foo` | `Dev Container — <hostPath>` |
 
 ---
 
@@ -144,10 +159,11 @@ There is currently **no automated test suite**.
 1. Enable the extension and open GNOME Overview.
 2. Type a partial folder name or URI fragment → results should appear.
 3. Click/Enter on a result → VS Code should open the matching folder.
-4. Test with remote URIs (`vscode-remote://…`) to verify `remoteAuthority`
-   parsing.
-5. Test with an empty or missing `state.vscdb` → extension should log the error
-   and show no results (no crash).
+4. Test SSH remote: result description should show `SSH: <host> — <path>`.
+5. Test Dev Container: result description should show `Dev Container — <hostPath>`.
+6. Test with a missing or renamed `workspaceStorage` dir → no crash, empty results.
+7. Test case-insensitive search: typing `ZTK` should find `ztk` entries.
+8. Verify the most-recently-opened workspace appears first.
 
 ```bash
 # Watch logs while manually testing
@@ -155,7 +171,7 @@ journalctl -fo cat /usr/bin/gnome-shell | grep -E "SearchProvider|codeopenrecent
 ```
 
 > TODO: Consider adding a GJS test harness (e.g., `jasmine-gjs`) for unit-testing
-> `_getHistoryEntries` with a fixture SQLite database.
+> `_getHistoryEntries` with a fixture `workspaceStorage` directory tree.
 
 ---
 
@@ -163,15 +179,14 @@ journalctl -fo cat /usr/bin/gnome-shell | grep -E "SearchProvider|codeopenrecent
 
 - **License:** GNU GPL-2.0-or-later (see [LICENSE](LICENSE)).
 - **No secrets / credentials** are stored or transmitted.
-- **Database access:** Read-only access to the user's local VS Code SQLite state
-  file. The path is hard-coded to `~/.config/Code/User/globalStorage/state.vscdb`;
-  no user-controlled path is evaluated.
-- **Command injection risk:** `activateResult` passes a URI directly to
-  `GLib.spawn_command_line_async("code --folder-uri <uri>")`. The URI originates
-  from VS Code's own state DB (trusted local data), but if this ever accepts
-  external input, it must be sanitised before shell-expansion.
+- **File access:** Read-only access to the user's local VS Code workspace storage.
+  Paths are derived from `GLib.get_home_dir()` — no user-controlled path is evaluated.
+- **Command injection risk:** `activateResult` uses `GLib.spawn_async` with an explicit
+  argv array `['code', '--folder-uri', uri]` — no shell expansion occurs.
+- **Hex decoding:** `_hexToString` uses `parseInt` + `TextDecoder` — no `eval`, no
+  dynamic code execution.
 - **Dependency scanning:** No npm/pip dependencies. The only external libraries
-  are GNOME platform libraries (`Gda`, `GLib`, `Gio`, `St`) — system-managed.
+  are GNOME platform libraries (`GLib`, `Gio`, `St`) — system-managed.
 - **GNOME `shell-version`:** Keep `metadata.json` up-to-date as new GNOME Shell
   releases are tested; never claim compatibility without testing.
 
@@ -226,11 +241,12 @@ journalctl -fo cat /usr/bin/gnome-shell | grep -E "SearchProvider|codeopenrecent
 | Hook / Variable | Purpose |
 |---|---|
 | `shell-version` in `metadata.json` | Controls which GNOME Shell versions load the extension |
-| `globalStorageDir` path in `_getHistoryEntries` | Could be made configurable via `GSettings` to support VS Code Insiders or Cursor |
-| `"code --folder-uri"` command | Could be made configurable to support alternative editors (e.g., `codium`) |
+| `workspaceStoragePath` in `_getHistoryEntries` | Could be made configurable via `GSettings` to support VS Code Insiders, Cursor, or VSCodium |
+| `['code', '--folder-uri']` argv in `activateResult` | Could be made configurable to support alternative editors |
+| `raw.slice(0, 100)` cap in `_getHistoryEntries` | Adjustable constant to tune history depth vs. search latency |
 | `console.debug(…)` calls | Controlled by GNOME Shell debug level; no extra flags needed |
 
-> TODO: Add a `GSettings` schema if per-user configuration (editor binary, DB
+> TODO: Add a `GSettings` schema if per-user configuration (editor binary, storage
 > path) is desired in the future.
 
 ---
@@ -239,7 +255,6 @@ journalctl -fo cat /usr/bin/gnome-shell | grep -E "SearchProvider|codeopenrecent
 
 - [GJS GNOME Shell Extensions Guide](https://gjs.guide/extensions/)
 - [GNOME Search Provider documentation](https://gjs.guide/extensions/topics/search-provider.html)
-- [libgda (Gda) GJS bindings](https://gjs-docs.gnome.org/gda50/)
 - [GNOME Extensions review guidelines](https://wiki.gnome.org/Projects/GnomeShell/Extensions/ReviewGuidelines)
 - [README.md](README.md) – current project status and contribution notes
 
@@ -257,3 +272,16 @@ journalctl -fo cat /usr/bin/gnome-shell | grep -E "SearchProvider|codeopenrecent
   `LICENSE` content was inferred from the SPDX header in `extension.js`
   (`GPL-2.0-or-later`). No constitution file found; Golden Rules section left as
   TODO pending user input.
+
+### 2026-05-03 — workspaceStorage migration
+
+- **Summary:** Replaced SQLite/`Gda` data source with `workspaceStorage/*/workspace.json`
+  enumeration. Removed `Gda` import entirely. Added `_hexToString`, `_buildLabelFromUri`,
+  and `_buildDescriptionFromUri` helpers for human-friendly display of all URI types.
+  Added case-insensitive search and top-100 result cap. Fixed `activateResult` shell-injection
+  risk by switching to `GLib.spawn_async` with explicit argv.
+- **Context coverage:** 100 % from workspace files + one terminal command
+  (`python3` hex-decode) to confirm devcontainer authority JSON shape.
+- **Key insight:** `workspaceStorage/*/workspace.json` is a simpler, single-source replacement
+  that covers all workspace types (local, SSH, devcontainer) with 590+ entries and free mtime
+  recency ordering — no SQLite required.
