@@ -14,7 +14,9 @@ cd ~/.local/share/gnome-shell/extensions/
 git clone https://github.com/gza/gnome-vscode-workspace-search.git vscode-workspace-search@gza.github.com
 ```
 
-2. Enable the extension:
+2. Restart GNOME Shell
+
+3. Enable the extension:
 
 ```bash
 gnome-extensions enable vscode-workspace-search@gza.github.com
