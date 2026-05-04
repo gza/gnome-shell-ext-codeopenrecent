@@ -2,8 +2,8 @@
 
 ## Current Status
 
-* I use it everyday and it works well for me.
-* Not published on extensions.gnome.org yet.
+- I use it everyday and it works well for me.
+- Not published on extensions.gnome.org yet.
 
 ## Installation
 
@@ -11,13 +11,13 @@
 
 ```bash
 cd ~/.local/share/gnome-shell/extensions/
-git clone https://github.com/gza/gnome-shell-ext-codeopenrecent.git codeopenrecent@webgr.fr
+git clone https://github.com/gza/gnome-vscode-workspace-search.git vscode-workspace-search@gza.github.com
 ```
 
 2. Enable the extension:
 
 ```bash
-gnome-extensions enable codeopenrecent@webgr.fr
+gnome-extensions enable vscode-workspace-search@gza.github.com
 ```
 
 ## Upgrade
@@ -25,7 +25,7 @@ gnome-extensions enable codeopenrecent@webgr.fr
 1. Pull the latest changes from the repository:
 
 ```bash
-cd ~/.local/share/gnome-shell/extensions/codeopenrecent@webgr.fr
+cd ~/.local/share/gnome-shell/extensions/vscode-workspace-search@gza.github.com
 git pull
 ```
 
@@ -33,8 +33,8 @@ git pull
 
 ## dev/testing
 
-* install mutter-devkit
-* `dbus-run-session gnome-shell --devkit --wayland`
+- install mutter-devkit
+- `dbus-run-session gnome-shell --devkit --wayland`
 
 ## Contributing
 

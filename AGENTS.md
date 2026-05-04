@@ -1,6 +1,6 @@
 # Project Overview
 
-`codeopenrecent@webgr.fr` is a pure-GJS GNOME Shell extension that registers a **Search
+`vscode-workspace-search@gza.github.com` is a pure-GJS GNOME Shell extension that registers a **Search
 Provider** in the GNOME Overview. It enumerates `~/.config/Code/User/workspaceStorage/` to
 expose recently-opened VS Code folder URIs (local, SSH, Dev Container) as search results,
 letting users open any recent workspace directly from GNOME Overview without launching VS Code.
@@ -10,7 +10,7 @@ letting users open any recent workspace directly from GNOME Overview without lau
 ## Repository Structure
 
 ```
-codeopenrecent@webgr.fr/
+vscode-workspace-search@gza.github.com/
 ├── extension.js   – All logic: SearchProvider class + Extension entry point
 ├── metadata.json  – UUID, name, description, shell-version list
 ├── README.md      – Status notes and contribution guidelines
@@ -25,8 +25,8 @@ codeopenrecent@webgr.fr/
 No build step — plain GJS ES modules.
 
 ```bash
-gnome-extensions enable codeopenrecent@webgr.fr
-gnome-extensions disable codeopenrecent@webgr.fr
+gnome-extensions enable vscode-workspace-search@gza.github.com
+gnome-extensions disable vscode-workspace-search@gza.github.com
 
 # Reload (X11)
 busctl --user call org.gnome.Shell /org/gnome/Shell org.gnome.Shell Eval s \
@@ -36,7 +36,7 @@ busctl --user call org.gnome.Shell /org/gnome/Shell org.gnome.Shell Eval s \
 dbus-run-session -- gnome-shell --nested --wayland
 
 # Live logs
-journalctl -fo cat /usr/bin/gnome-shell | grep -i "codeopenrecent\|SearchProvider"
+journalctl -fo cat /usr/bin/gnome-shell | grep -i "vscode-workspace-search\|SearchProvider"
 
 npx eslint extension.js
 ```
@@ -95,11 +95,11 @@ GNOME Overview search bar
                 └─ GLib.spawn_async(['code', '--folder-uri', uri])
 ```
 
-| URI scheme | Label | Description | Icon |
-|---|---|---|---|
-| `file:///path/foo` | `foo` | `/path/foo` | `folder` |
-| `vscode-remote://ssh-remote%2Bhost/path` | `host — path` | `/path` | `network-server` |
-| `vscode-remote://dev-container%2B<HEX>/workspaces/foo` | `Container — foo` | `Dev Container — <hostPath>` | `computer` |
+| URI scheme                                             | Label             | Description                  | Icon             |
+| ------------------------------------------------------ | ----------------- | ---------------------------- | ---------------- |
+| `file:///path/foo`                                     | `foo`             | `/path/foo`                  | `folder`         |
+| `vscode-remote://ssh-remote%2Bhost/path`               | `host — path`     | `/path`                      | `network-server` |
+| `vscode-remote://dev-container%2B<HEX>/workspaces/foo` | `Container — foo` | `Dev Container — <hostPath>` | `computer`       |
 
 Key helpers: `_hexToString(hex)` (TextDecoder, GNOME Shell 45+), `_buildLabelFromUri`,
 `_buildDescriptionFromUri`.
@@ -117,7 +117,7 @@ No automated suite. Manual checklist:
 5. URIs with special characters open without shell-expansion issues.
 
 ```bash
-journalctl -fo cat /usr/bin/gnome-shell | grep -E "SearchProvider|codeopenrecent|Error"
+journalctl -fo cat /usr/bin/gnome-shell | grep -E "SearchProvider|vscode-workspace-search|Error"
 ```
 
 ---
@@ -162,12 +162,12 @@ journalctl -fo cat /usr/bin/gnome-shell | grep -E "SearchProvider|codeopenrecent
 
 ## Extensibility Hooks
 
-| Hook | Purpose |
-|---|---|
-| `shell-version` in `metadata.json` | Controls which GNOME Shell versions load the extension |
+| Hook                                           | Purpose                                                        |
+| ---------------------------------------------- | -------------------------------------------------------------- |
+| `shell-version` in `metadata.json`             | Controls which GNOME Shell versions load the extension         |
 | `workspaceStoragePath` in `_getHistoryEntries` | Configurable via `GSettings` to support Cursor, VSCodium, etc. |
-| `['code', '--folder-uri']` in `activateResult` | Configurable to support alternative editors |
-| `slice(0, 100)` cap in `_getHistoryEntries` | Tune history depth vs. search latency |
+| `['code', '--folder-uri']` in `activateResult` | Configurable to support alternative editors                    |
+| `slice(0, 100)` cap in `_getHistoryEntries`    | Tune history depth vs. search latency                          |
 
 ---
 
