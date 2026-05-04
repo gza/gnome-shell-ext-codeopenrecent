@@ -1,4 +1,4 @@
-# Pure GJS Implementation of recent opened VSCode folders SearchProvider
+# GNOME VSCode workspace SearchProvider
 
 ## Current Status
 
