@@ -24,23 +24,6 @@ vscode-workspace-search@gza.github.com/
 
 No build step — plain GJS ES modules.
 
-```bash
-gnome-extensions enable vscode-workspace-search@gza.github.com
-gnome-extensions disable vscode-workspace-search@gza.github.com
-
-# Reload (X11)
-busctl --user call org.gnome.Shell /org/gnome/Shell org.gnome.Shell Eval s \
-  'Meta.restart("Restarting…", global.context)'
-
-# Reload (Wayland — nested session)
-dbus-run-session -- gnome-shell --nested --wayland
-
-# Live logs
-journalctl -fo cat /usr/bin/gnome-shell | grep -i "vscode-workspace-search\|SearchProvider"
-
-npx eslint extension.js
-```
-
 ---
 
 ## Code Style & Conventions
@@ -112,7 +95,7 @@ No automated suite. Manual checklist:
 
 1. Local / SSH / Dev Container entries appear and open correctly.
 2. Most-recently-used workspace appears first.
-3. Case-insensitive search works (`ZTK` finds `ztk`).
+3. Case-insensitive search works (`MyProject` finds `myproject`).
 4. Missing `workspaceStorage` dir or malformed `workspace.json` → no crash.
 5. URIs with special characters open without shell-expansion issues.
 
