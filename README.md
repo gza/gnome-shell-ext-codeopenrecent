@@ -2,9 +2,8 @@
 
 ## Current Status
 
-* Works for me, but not tested extensively. Use at your own risk.
+* I use it everyday and it works well for me.
 * Not published on extensions.gnome.org yet.
-* Use cases are probably missing.
 
 # testing
 
